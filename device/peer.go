@@ -11,7 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
+	"net/netip"
 	"golang.zx2c4.com/wireguard/conn"
 )
 
@@ -24,6 +24,14 @@ type Peer struct {
 	txBytes           atomic.Uint64  // bytes send to peer (endpoint)
 	rxBytes           atomic.Uint64  // bytes received from peer
 	lastHandshakeNano atomic.Int64   // nano seconds since epoch
+
+	ping struct {
+		target netip.Addr
+		lastSuccessfulPongNano atomic.Int64   // nano seconds since epoch
+		lastSentPingNano      atomic.Int64   // nano seconds since epoch
+		lastPingSeq 	      atomic.Uint64  // ping seq
+		latency 			 atomic.Uint64  // latency in nano seconds
+	}
 
 	endpoint struct {
 		sync.Mutex
@@ -38,6 +46,7 @@ type Peer struct {
 		newHandshake            *Timer
 		zeroKeyMaterial         *Timer
 		persistentKeepalive     *Timer
+		ping                    *Timer
 		handshakeAttempts       atomic.Uint32
 		needAnotherKeepalive    atomic.Bool
 		sentLastMinuteHandshake atomic.Bool

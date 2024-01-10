@@ -119,6 +119,7 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 			sendf("tx_bytes=%d", peer.txBytes.Load())
 			sendf("rx_bytes=%d", peer.rxBytes.Load())
 			sendf("persistent_keepalive_interval=%d", peer.persistentKeepaliveInterval.Load())
+			sendf("latency=%d", peer.ping.latency.Load())
 
 			device.allowedips.EntriesForPeer(peer, func(prefix netip.Prefix) bool {
 				sendf("allowed_ip=%s", prefix.String())
@@ -240,6 +241,18 @@ func (device *Device) handleDeviceLine(key, value string) error {
 		device.log.Verbosef("UAPI: Removing all peers")
 		device.RemoveAllPeers()
 
+	case "ping_source":
+		if value == "0.0.0.0" {
+			device.log.Verbosef("UAPI: Unsetting ping src")
+			device.ping.src = netip.Addr{} // default value, not initialized, which means it's disabled
+			break
+		}
+		device.log.Verbosef("UAPI: Setting ping src %v", value)
+		ip, err := netip.ParseAddr(value)
+		if err != nil {
+			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set ping target: %w", err)
+		}
+		device.ping.src = ip
 	default:
 		return ipcErrorf(ipc.IpcErrorInvalid, "invalid UAPI device key: %v", key)
 	}
@@ -385,7 +398,19 @@ func (device *Device) handlePeerLine(peer *ipcSetPeer, key, value string) error 
 		if value != "1" {
 			return ipcErrorf(ipc.IpcErrorInvalid, "invalid protocol version: %v", value)
 		}
+	case "ping_target":
+		if value == "0.0.0.0" {
+			device.log.Verbosef("%v - UAPI: Unsetting ping target", peer.Peer)
+			device.ping.src = netip.Addr{} // default value, not initialized, which means it's disabled
+			break
+		}
 
+		device.log.Verbosef("%v - UAPI: Updating ping target: %v", peer.Peer, value)
+		ip, err := netip.ParseAddr(value)
+		if err != nil {
+			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set ping target: %w", err)
+		}
+		peer.ping.target = ip
 	default:
 		return ipcErrorf(ipc.IpcErrorInvalid, "invalid UAPI peer key: %v", key)
 	}

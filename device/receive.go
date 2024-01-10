@@ -19,6 +19,10 @@ import (
 	"golang.zx2c4.com/wireguard/conn"
 )
 
+const (
+	ipProtocolICMP = 0x01
+)
+
 type QueueHandshakeElement struct {
 	msgType  uint32
 	packet   []byte
@@ -484,11 +488,17 @@ func (peer *Peer) RoutineSequentialReceiver(maxBatchSize int) {
 				}
 				elem.packet = elem.packet[:length]
 				src := elem.packet[IPv4offsetSrc : IPv4offsetSrc+net.IPv4len]
+
 				if device.allowedips.Lookup(src) != peer {
 					device.log.Verbosef("IPv4 packet with disallowed source address from %v", peer)
 					continue
 				}
 
+				proto := elem.packet[IPv4offsetProtocol]
+				if proto == ipProtocolICMP {
+					// peer.device.log.Errorf("Got a ping from peer: %v", peer)
+					peer.CheckPing(elem.packet)
+				}
 			case 6:
 				if len(elem.packet) < ipv6.HeaderLen {
 					continue

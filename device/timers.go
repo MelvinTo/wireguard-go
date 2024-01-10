@@ -134,6 +134,13 @@ func expiredPersistentKeepalive(peer *Peer) {
 	}
 }
 
+func expiredPing(peer *Peer) {
+	peer.SendPing()
+	if peer.timersActive() {
+		peer.timers.ping.Mod(PingTimeout)
+	}
+}
+
 /* Should be called after an authenticated data packet is sent. */
 func (peer *Peer) timersDataSent() {
 	if peer.timersActive() && !peer.timers.newHandshake.IsPending() {
@@ -204,6 +211,8 @@ func (peer *Peer) timersInit() {
 	peer.timers.newHandshake = peer.NewTimer(expiredNewHandshake)
 	peer.timers.zeroKeyMaterial = peer.NewTimer(expiredZeroKeyMaterial)
 	peer.timers.persistentKeepalive = peer.NewTimer(expiredPersistentKeepalive)
+	peer.timers.ping = peer.NewTimer(expiredPing)
+	peer.timers.ping.Mod(PingTimeout)
 }
 
 func (peer *Peer) timersStart() {
@@ -218,4 +227,5 @@ func (peer *Peer) timersStop() {
 	peer.timers.newHandshake.DelSync()
 	peer.timers.zeroKeyMaterial.DelSync()
 	peer.timers.persistentKeepalive.DelSync()
+	peer.timers.ping.DelSync()
 }

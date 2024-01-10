@@ -13,6 +13,7 @@ const (
 	IPv4offsetTotalLength = 2
 	IPv4offsetSrc         = 12
 	IPv4offsetDst         = IPv4offsetSrc + net.IPv4len
+	IPv4offsetProtocol    = 9
 )
 
 const (

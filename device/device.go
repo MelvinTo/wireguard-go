@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"net/netip"
 
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/ratelimiter"
@@ -84,6 +85,10 @@ type Device struct {
 	tun struct {
 		device tun.Device
 		mtu    atomic.Int32
+	}
+
+	ping struct {
+		src netip.Addr
 	}
 
 	ipcMutex sync.RWMutex

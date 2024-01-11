@@ -119,7 +119,15 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 			sendf("tx_bytes=%d", peer.txBytes.Load())
 			sendf("rx_bytes=%d", peer.rxBytes.Load())
 			sendf("persistent_keepalive_interval=%d", peer.persistentKeepaliveInterval.Load())
-			sendf("latency=%d", peer.ping.latency.Load())
+
+			pingNano := peer.ping.lastSuccessfulPongNano.Load()
+			if peer.ping.target.IsValid() && pingNano != 0 {
+				sendf("ping_latency=%d", peer.ping.latency.Load())
+				sendf("ping_target=%s", peer.ping.target.String())
+
+				pingSecs := pingNano / time.Second.Nanoseconds()
+				sendf("ping_timestamp=%d", pingSecs)
+			}
 
 			device.allowedips.EntriesForPeer(peer, func(prefix netip.Prefix) bool {
 				sendf("allowed_ip=%s", prefix.String())

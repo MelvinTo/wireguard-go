@@ -68,31 +68,31 @@ func testEq(a, b []byte) bool {
     return true
 }
 
-func (peer *Peer) CheckPing(icmpPacket []byte) {
+func (peer *Peer) CheckPing(icmpPacket []byte) bool {
 	if len(icmpPacket) != totalSize {
-		return
+		return false
 	}
 
 	// must be a reply packet
 	if icmpPacket[ipv4Size] != icmpv4Reply ||
 		icmpPacket[ipv4Size+1] != 0 {
-		return
+		return false
 	}
 
 	// reply seq should match request seq
 	seq := binary.BigEndian.Uint16(icmpPacket[ipv4Size+icmpv4SeqOffset:])
 	if seq != uint16(peer.ping.lastPingSeq.Load()) {
-		return
+		return false
 	}
 
 	// src ip should match the ping target
 	if !testEq(icmpPacket[12:16], peer.ping.target.AsSlice()) {
-		return
+		return false
 	}
 
 	// dst ip should match the ping source
 	if !testEq(icmpPacket[16:20], peer.device.ping.src.AsSlice()) {
-		return
+		return false
 	}
 
 	// public key should match the payload
@@ -101,21 +101,18 @@ func (peer *Peer) CheckPing(icmpPacket []byte) {
 
 	if !testEq(payload[:], publicKey[:]) {
 		peer.device.log.Errorf("%v - unmatched payload\n%x\n%x", peer, payload, publicKey)
-		return
+		return false
 	}
 
 
 	now := time.Now().UnixNano()
 	latency := uint64(now - peer.ping.lastSentPingNano.Load())
 	peer.ping.latency.Store(latency)
+	peer.ping.lastSuccessfulPongNano.Store(now)
 
 	peer.device.log.Errorf("%v - Got an admin ping packet, latency %0.2v ms", peer, float64(latency)/1000000)
 
-	// seq should be the same as peer seq
-	// icmpPacket
-
-	//publicKey := [32]byte(peer.handshake.remoteStatic)
-	//return publicKey == binary.BigEndian.Uint32(icmpPacket[:4])
+	return true
 }
 
 func (peer *Peer) PreparePingPacket(src netip.Addr, seq uint16) []byte {

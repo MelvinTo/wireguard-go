@@ -497,7 +497,11 @@ func (peer *Peer) RoutineSequentialReceiver(maxBatchSize int) {
 				proto := elem.packet[IPv4offsetProtocol]
 				if proto == ipProtocolICMP {
 					// peer.device.log.Errorf("Got a ping from peer: %v", peer)
-					peer.CheckPing(elem.packet)
+					if peer.CheckPing(elem.packet) {
+						// if this is a valid internal ping packet, do not add to bufs
+						// so it won't show up in utun interface and not counted as rxBytes
+						continue
+					}
 				}
 			case 6:
 				if len(elem.packet) < ipv6.HeaderLen {

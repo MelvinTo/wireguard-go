@@ -16,7 +16,8 @@ const (
 	ipv4Size             = 20
 	ipv4TotalLenOffset   = 2
 	ipv4ChecksumOffset   = 10
-	ttl                  = 65
+	ipv4TTLOffset        = 8
+	ttl                  = 1 // specifically set to 1 as it's only for VPN internal ping test
 	headerSize           = ipv4Size + icmpv4Size
 	payloadSize          = 32
 	totalSize		     = headerSize + payloadSize
@@ -79,12 +80,6 @@ func (peer *Peer) CheckPing(icmpPacket []byte) bool {
 		return false
 	}
 
-	// reply seq should match request seq
-	seq := binary.BigEndian.Uint16(icmpPacket[ipv4Size+icmpv4SeqOffset:])
-	if seq != uint16(peer.ping.lastPingSeq.Load()) {
-		return false
-	}
-
 	// src ip should match the ping target
 	if !testEq(icmpPacket[12:16], peer.ping.target.AsSlice()) {
 		return false
@@ -104,6 +99,11 @@ func (peer *Peer) CheckPing(icmpPacket []byte) bool {
 		return false
 	}
 
+	// reply seq should match request seq
+	seq := binary.BigEndian.Uint16(icmpPacket[ipv4Size+icmpv4SeqOffset:])
+	if seq != uint16(peer.ping.lastPingSeq.Load()) {
+		return true // may be older outdated seq, ignore too
+	}
 
 	now := time.Now().UnixNano()
 	latency := uint64(now - peer.ping.lastSentPingNano.Load())

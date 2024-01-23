@@ -121,12 +121,20 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 			sendf("persistent_keepalive_interval=%d", peer.persistentKeepaliveInterval.Load())
 
 			pingNano := peer.ping.lastSuccessfulPongNano.Load()
-			if peer.ping.target.IsValid() && pingNano != 0 {
+			if peer.addr.IsValid() && pingNano != 0 {
 				sendf("ping_latency=%d", peer.ping.latency.Load())
-				sendf("ping_target=%s", peer.ping.target.String())
+				sendf("ping_target=%s", peer.addr.String())
 
 				pingSecs := pingNano / time.Second.Nanoseconds()
 				sendf("ping_timestamp=%d", pingSecs)
+			}
+
+			if peer.name != "" {
+				sendf("name=%s", peer.name)
+			}
+
+			if peer.model != "" {
+				sendf("fw_model=%s", peer.model)
 			}
 
 			device.allowedips.EntriesForPeer(peer, func(prefix netip.Prefix) bool {
@@ -252,7 +260,7 @@ func (device *Device) handleDeviceLine(key, value string) error {
 	case "ping_source":
 		if value == "0.0.0.0" {
 			device.log.Verbosef("UAPI: Unsetting ping src")
-			device.ping.src = netip.Addr{} // default value, not initialized, which means it's disabled
+			device.addr = netip.Addr{} // default value, not initialized, which means it's disabled
 			break
 		}
 		device.log.Verbosef("UAPI: Setting ping src %v", value)
@@ -260,7 +268,7 @@ func (device *Device) handleDeviceLine(key, value string) error {
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set ping target: %w", err)
 		}
-		device.ping.src = ip
+		device.addr = ip
 	default:
 		return ipcErrorf(ipc.IpcErrorInvalid, "invalid UAPI device key: %v", key)
 	}
@@ -409,7 +417,7 @@ func (device *Device) handlePeerLine(peer *ipcSetPeer, key, value string) error 
 	case "ping_target":
 		if value == "0.0.0.0" {
 			device.log.Verbosef("%v - UAPI: Unsetting ping target", peer.Peer)
-			device.ping.src = netip.Addr{} // default value, not initialized, which means it's disabled
+			device.addr = netip.Addr{} // default value, not initialized, which means it's disabled
 			break
 		}
 
@@ -418,7 +426,7 @@ func (device *Device) handlePeerLine(peer *ipcSetPeer, key, value string) error 
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to set ping target: %w", err)
 		}
-		peer.ping.target = ip
+		peer.addr = ip
 	default:
 		return ipcErrorf(ipc.IpcErrorInvalid, "invalid UAPI peer key: %v", key)
 	}

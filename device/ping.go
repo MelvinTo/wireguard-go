@@ -24,11 +24,15 @@ const (
 )
 
 func (peer *Peer) SendPing() {
-	src := peer.device.ping.src
-	dst := peer.ping.target
+	src := peer.device.addr
+	dst := peer.addr
 
 	if !src.IsValid() || !dst.IsValid() {
 		return // do nothing if ping is not well configured
+	}
+
+	if peer.lastHandshakeNano.Load() == 0 {
+		return // do nothing if handshake is not done
 	}
 
 	if len(peer.queue.staged) == 0 && peer.isRunning.Load() {
@@ -48,7 +52,7 @@ func (peer *Peer) SendPing() {
 
 		select {
 		case peer.queue.staged <- elemsContainer:
-			peer.device.log.Errorf("%v - Sending ping packet from %v to %v", peer, src, dst)
+			peer.device.log.Verbosef("%v - Sending ping packet from %v to %v", peer, src, dst)
 		default:
 			peer.device.PutMessageBuffer(elem.buffer)
 			peer.device.PutOutboundElement(elem)
@@ -81,12 +85,12 @@ func (peer *Peer) CheckPing(icmpPacket []byte) bool {
 	}
 
 	// src ip should match the ping target
-	if !testEq(icmpPacket[12:16], peer.ping.target.AsSlice()) {
+	if !testEq(icmpPacket[12:16], peer.addr.AsSlice()) {
 		return false
 	}
 
 	// dst ip should match the ping source
-	if !testEq(icmpPacket[16:20], peer.device.ping.src.AsSlice()) {
+	if !testEq(icmpPacket[16:20], peer.device.addr.AsSlice()) {
 		return false
 	}
 
@@ -110,7 +114,7 @@ func (peer *Peer) CheckPing(icmpPacket []byte) bool {
 	peer.ping.latency.Store(latency)
 	peer.ping.lastSuccessfulPongNano.Store(now)
 
-	peer.device.log.Errorf("%v - Got an admin ping packet, latency %0.2v ms", peer, float64(latency)/1000000)
+	peer.device.log.Verbosef("%v - Got an admin ping packet, latency %0.2v ms", peer, float64(latency)/1000000)
 
 	return true
 }
@@ -120,7 +124,7 @@ func (peer *Peer) PreparePingPacket(src netip.Addr, seq uint16) []byte {
 	publicKey := [32]byte(peer.handshake.remoteStatic)
 	copy(payload[:], publicKey[:])
 
-	return genICMPv4(payload, peer.ping.target, src, seq)
+	return genICMPv4(payload, peer.addr, src, seq)
 }
 
 // Checksum is the "internet checksum" from https://tools.ietf.org/html/rfc1071.

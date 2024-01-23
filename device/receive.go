@@ -502,7 +502,14 @@ func (peer *Peer) RoutineSequentialReceiver(maxBatchSize int) {
 						// so it won't show up in utun interface and not counted as rxBytes
 						continue
 					}
+				} else if proto == udpProtocolNumber &&
+					testEq(elem.packet[12:16], peer.addr.AsSlice()) &&
+					testEq(elem.packet[16:20], peer.device.addr.AsSlice()) {
+					if peer.HandleControlResponse(elem.packet) {
+						continue
+					}
 				}
+
 			case 6:
 				if len(elem.packet) < ipv6.HeaderLen {
 					continue

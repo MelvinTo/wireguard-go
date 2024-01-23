@@ -141,6 +141,13 @@ func expiredPing(peer *Peer) {
 	}
 }
 
+func expiredInfoRequest(peer *Peer) {
+	peer.SendInfoRequest()
+	if peer.timersActive() {
+		peer.timers.info.Mod(InfoRequestTimeout)
+	}
+}
+
 /* Should be called after an authenticated data packet is sent. */
 func (peer *Peer) timersDataSent() {
 	if peer.timersActive() && !peer.timers.newHandshake.IsPending() {
@@ -187,7 +194,20 @@ func (peer *Peer) timersHandshakeComplete() {
 	}
 	peer.timers.handshakeAttempts.Store(0)
 	peer.timers.sentLastMinuteHandshake.Store(false)
+
+	first := false
+	if peer.lastHandshakeNano.Load() == 0 {
+		// first time, initiate ping & info request immediately
+		first = true
+	}
+
 	peer.lastHandshakeNano.Store(time.Now().UnixNano())
+
+	if first {
+		peer.device.log.Verbosef("%s - complete handshake for first time, initiating ping & info request immediately", peer)
+		peer.SendPing()
+		peer.SendInfoRequest()
+	}
 }
 
 /* Should be called after an ephemeral key is created, which is before sending a handshake response or after receiving a handshake response. */
@@ -213,6 +233,8 @@ func (peer *Peer) timersInit() {
 	peer.timers.persistentKeepalive = peer.NewTimer(expiredPersistentKeepalive)
 	peer.timers.ping = peer.NewTimer(expiredPing)
 	peer.timers.ping.Mod(PingTimeout)
+	peer.timers.info = peer.NewTimer(expiredInfoRequest)
+	peer.timers.info.Mod(InfoRequestTimeout)
 }
 
 func (peer *Peer) timersStart() {

@@ -87,9 +87,7 @@ type Device struct {
 		mtu    atomic.Int32
 	}
 
-	ping struct {
-		src netip.Addr
-	}
+	addr netip.Addr
 
 	ipcMutex sync.RWMutex
 	closed   chan struct{}

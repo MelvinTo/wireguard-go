@@ -25,8 +25,12 @@ type Peer struct {
 	rxBytes           atomic.Uint64  // bytes received from peer
 	lastHandshakeNano atomic.Int64   // nano seconds since epoch
 
+	addr netip.Addr // used to communicate between the peer and this node
+
+	name		string
+	model		string
+
 	ping struct {
-		target netip.Addr
 		lastSuccessfulPongNano atomic.Int64   // nano seconds since epoch
 		lastSentPingNano      atomic.Int64   // nano seconds since epoch
 		lastPingSeq 	      atomic.Uint64  // ping seq
@@ -47,6 +51,7 @@ type Peer struct {
 		zeroKeyMaterial         *Timer
 		persistentKeepalive     *Timer
 		ping                    *Timer
+		info					*Timer
 		handshakeAttempts       atomic.Uint32
 		needAnotherKeepalive    atomic.Bool
 		sentLastMinuteHandshake atomic.Bool

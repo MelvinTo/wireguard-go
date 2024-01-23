@@ -22,6 +22,7 @@ const (
 	RejectAfterTime         = time.Second * 180
 	KeepaliveTimeout        = time.Second * 10
 	PingTimeout             = time.Second * 5
+	InfoRequestTimeout      = time.Second * 300
 	CookieRefreshTime       = time.Second * 120
 	HandshakeInitationRate  = time.Second / 50
 	PaddingMultiple         = 16

@@ -8,6 +8,7 @@ package ipc
 import (
 	"net"
 	"os"
+	"fmt"
 
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/rwcancel"
@@ -55,6 +56,7 @@ func UAPIListen(name string, file *os.File) (net.Listener, error) {
 
 	listener, err := net.FileListener(file)
 	if err != nil {
+		fmt.Println("UAPIListen: net.FileListener failed")
 		return nil, err
 	}
 
@@ -74,6 +76,7 @@ func UAPIListen(name string, file *os.File) (net.Listener, error) {
 
 	uapi.inotifyFd, err = unix.InotifyInit()
 	if err != nil {
+		fmt.Println("UAPIListen: inotifyInit failed")
 		return nil, err
 	}
 
@@ -86,12 +89,14 @@ func UAPIListen(name string, file *os.File) (net.Listener, error) {
 	)
 
 	if err != nil {
+		fmt.Println("UAPIListen: inotifyAddWatch failed")
 		return nil, err
 	}
 
 	uapi.inotifyRWCancel, err = rwcancel.NewRWCancel(uapi.inotifyFd)
 	if err != nil {
 		unix.Close(uapi.inotifyFd)
+		fmt.Println("UAPIListen: NewRWCancel failed")
 		return nil, err
 	}
 

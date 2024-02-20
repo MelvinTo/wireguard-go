@@ -17,6 +17,7 @@ import (
 
 type Peer struct {
 	isRunning         atomic.Bool
+	isDiscovered	  atomic.Bool
 	keypairs          Keypairs
 	handshake         Handshake
 	device            *Device
@@ -37,11 +38,18 @@ type Peer struct {
 		latency 			 atomic.Uint64  // latency in nano seconds
 	}
 
+	history struct {
+		originalEndpoint string
+		originalEndpointIP string
+		lastSuccessfulEndpoints map[string]bool
+	}
+
 	endpoint struct {
 		sync.Mutex
 		val            conn.Endpoint
 		clearSrcOnTx   bool // signal to val.ClearSrc() prior to next packet transmission
 		disableRoaming bool
+		lastEndpointSetNano atomic.Int64   // nano seconds since epoch
 	}
 
 	timers struct {
@@ -114,6 +122,7 @@ func (device *Device) NewPeer(pk NoisePublicKey) (*Peer, error) {
 	// reset endpoint
 	peer.endpoint.Lock()
 	peer.endpoint.val = nil
+	peer.endpoint.lastEndpointSetNano.Store(time.Now().UnixNano())
 	peer.endpoint.disableRoaming = false
 	peer.endpoint.clearSrcOnTx = false
 	peer.endpoint.Unlock()
@@ -298,6 +307,7 @@ func (peer *Peer) SetEndpointFromPacket(endpoint conn.Endpoint) {
 	}
 	peer.endpoint.clearSrcOnTx = false
 	peer.endpoint.val = endpoint
+	peer.endpoint.lastEndpointSetNano.Store(time.Now().UnixNano())
 }
 
 func (peer *Peer) markEndpointSrcForClearing() {

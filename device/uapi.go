@@ -107,6 +107,13 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 			peer.endpoint.Lock()
 			if peer.endpoint.val != nil {
 				sendf("endpoint=%s", peer.endpoint.val.DstToString())
+
+				lec := peer.endpoint.lastEndpointSetNano.Load()
+
+				if lec != 0 {
+					sendf("last_endpoint_change=%d", lec)
+				}
+
 			}
 			peer.endpoint.Unlock()
 
@@ -135,6 +142,14 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 
 			if peer.model != "" {
 				sendf("fw_model=%s", peer.model)
+			}
+
+			if peer.isDiscovered.Load() {
+				sendf("is_discovered=1")
+			}
+
+			if peer.history.originalEndpoint != "" {
+				sendf("original_endpoint=%s", peer.history.originalEndpoint)
 			}
 
 			device.allowedips.EntriesForPeer(peer, func(prefix netip.Prefix) bool {
@@ -375,6 +390,7 @@ func (device *Device) handlePeerLine(peer *ipcSetPeer, key, value string) error 
 		peer.endpoint.Lock()
 		defer peer.endpoint.Unlock()
 		peer.endpoint.val = endpoint
+		peer.endpoint.lastEndpointSetNano.Store(time.Now().UnixNano())
 
 	case "persistent_keepalive_interval":
 		device.log.Verbosef("%v - UAPI: Updating persistent keepalive interval", peer.Peer)

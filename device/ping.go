@@ -1,7 +1,10 @@
 package device
 
 import (
+	"context"
 	"encoding/binary"
+	"fmt"
+	"net"
 	"net/netip"
 	"time"
 )
@@ -23,6 +26,66 @@ const (
 	totalSize		     = headerSize + payloadSize
 )
 
+func (peer *Peer) IsPeerUnreachable() bool {
+	now := time.Now().UnixNano()
+	lastEndpointSetNano := peer.endpoint.lastEndpointSetNano.Load()
+	if now - lastEndpointSetNano < 20 * 1000 * 1000 * 1000 {
+		return false
+	}
+
+	lastHandshakeNano := peer.lastHandshakeNano.Load()
+	if lastHandshakeNano == 0 || now - lastHandshakeNano > 300 * 1000 * 1000 * 1000 {
+		return true
+	}
+
+	pong := peer.ping.lastSuccessfulPongNano.Load()
+
+	if pong == 0 || now - pong > 20 * 1000 * 1000 * 1000 {
+		return true
+	}
+
+	return false
+}
+
+func (peer *Peer) reapplyOriginalEndpoint() {
+	if peer.history.originalEndpoint == "" {
+		return
+	}
+
+	oe := peer.history.originalEndpoint
+
+	peer.device.log.Verbosef("%v - Reapplying original endpoint %v", peer, oe)
+
+	domain, port, err := net.SplitHostPort(oe)
+
+	// FIXME: should support ipv6 in the future
+	ips, err := net.DefaultResolver.LookupIP(context.Background(), "ip4", domain)
+	// ips, err := net.LookupIP(domain)
+	if err != nil || len(ips) == 0 {
+		peer.device.log.Errorf("%v - Failed to resolve original endpoint domain %v: %v", peer, domain, err)
+		return
+	}
+
+	ip := ips[0]
+
+	peer.device.log.Verbosef("%v - Resolved original endpoint domain %v to IP %v", peer, domain, ip)
+
+	endpoint, err := peer.device.net.bind.ParseEndpoint(fmt.Sprintf("%v:%v", ip, port))
+
+	if err != nil {
+		peer.device.log.Errorf("UAPI: Failed to parse endpoint: %v:%v, err: %v", ip, port, err)
+	} else {
+		peer.endpoint.Lock()
+		defer peer.endpoint.Unlock()
+		peer.endpoint.val = endpoint
+		peer.endpoint.lastEndpointSetNano.Store(time.Now().UnixNano())
+		// if peer.lastHandshakeNano.Load() == 0 {
+		// 	peer.SendHandshakeInitiation(true)
+		// 	peer.SendStagedPackets()
+		// }
+	}
+}
+
 func (peer *Peer) SendPing() {
 	src := peer.device.addr
 	dst := peer.addr
@@ -31,9 +94,16 @@ func (peer *Peer) SendPing() {
 		return // do nothing if ping is not well configured
 	}
 
-	if peer.lastHandshakeNano.Load() == 0 {
-		return // do nothing if handshake is not done
+	peer.device.log.Verbosef("%v - send ping from %v to %v", peer, src, dst)
+
+	if peer.IsPeerUnreachable() {
+		peer.device.log.Verbosef("%v - Peer is unreachable", peer)
+		go peer.reapplyOriginalEndpoint()
 	}
+
+	// if peer.lastHandshakeNano.Load() == 0 {
+	// 	return // do nothing if handshake is not done
+	// }
 
 	if len(peer.queue.staged) == 0 && peer.isRunning.Load() {
 		elem := peer.device.NewOutboundElement()
